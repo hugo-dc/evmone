@@ -167,7 +167,7 @@ std::optional<evmc_message> Host::prepare_message(evmc_message msg)
         msg.recipient = compute_new_address(msg, sender_nonce);
 
         // By EIP-2929, the  access to new created address is never reverted.
-        m_accessed_addresses.insert(msg.recipient);
+        access_account(msg.recipient);
     }
 
     return msg;
@@ -334,6 +334,9 @@ void Host::emit_log(const address& addr, const uint8_t* data, size_t data_size,
 
 evmc_access_status Host::access_account(const address& addr) noexcept
 {
+    if (m_rev < EVMC_BERLIN)
+        return EVMC_ACCESS_COLD;  // Ignore before Berlin.
+
     // TODO: Predefined warm addresses can be applied to the state cache before execution.
 
     // Transaction {sender,to} are always warm.
