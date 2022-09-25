@@ -46,6 +46,8 @@ struct Account
     /// Is the account "touched" as defined in EIP-161.
     bool touched = false;
 
+    evmc_access_status access_status = EVMC_ACCESS_COLD;
+
     [[nodiscard]] bool is_empty() const noexcept
     {
         return code.empty() && nonce == 0 && balance == 0;

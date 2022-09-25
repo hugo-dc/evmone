@@ -19,7 +19,6 @@ class Host : public evmc::Host
     State& m_state;
     const BlockInfo& m_block;
     const Transaction& m_tx;
-    std::unordered_set<address> m_accessed_addresses;
     std::vector<address> m_destructs;
     std::vector<Log> m_logs;
 

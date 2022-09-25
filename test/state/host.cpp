@@ -273,7 +273,6 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
 
     auto state_snapshot = m_state;
     auto destructs_snapshot = m_destructs.size();
-    auto access_addresses_snapshot = m_accessed_addresses;
     auto logs_snapshot = m_logs.size();
 
     auto result = execute_message(*msg);
@@ -287,7 +286,6 @@ evmc::Result Host::call(const evmc_message& orig_msg) noexcept
         // Revert.
         m_state = std::move(state_snapshot);
         m_destructs.resize(destructs_snapshot);
-        m_accessed_addresses = std::move(access_addresses_snapshot);
         m_logs.resize(logs_snapshot);
 
         // The 0x03 quirk: the touch on this address is never reverted.
@@ -356,7 +354,15 @@ evmc_access_status Host::access_account(const address& addr) noexcept
             return EVMC_ACCESS_WARM;
     }
 
-    return m_accessed_addresses.insert(addr).second ? EVMC_ACCESS_COLD : EVMC_ACCESS_WARM;
+    // If the account is in the State cache mark it as "accessed".
+    if (auto acc = m_state.get_or_null(addr); acc != nullptr)
+        return std::exchange(acc->access_status, EVMC_ACCESS_WARM);
+
+    // Otherwise create new empty and touched account (will be erased at the end of transaction).
+    auto& ca = m_state.create(addr);
+    ca.touched = true;
+    ca.access_status = EVMC_ACCESS_WARM;
+    return EVMC_ACCESS_COLD;
 }
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
