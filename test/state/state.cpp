@@ -106,13 +106,12 @@ std::optional<std::vector<Log>> transition(
     if (sender_acc.nonce == Account::NonceMax)
         return {};
 
-    const auto tx_max_cost_512 = intx::umul(intx::uint256{tx.gas_limit}, tx.max_gas_price);
-    auto sender_balance_check = sender_acc.balance;
-    if (sender_balance_check < tx_max_cost_512)
-        return {};
-
-    sender_balance_check -= static_cast<intx::uint256>(tx_max_cost_512);
-    if (sender_balance_check < tx.value)
+    // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
+    // Note this is different from tx_max_cost computed with effective gas price later.
+    // The computation cannot overflow if done with 512-bit precision.
+    if (const auto tx_cost_limit_512 =
+            umul(intx::uint256{tx.gas_limit}, tx.max_gas_price) + tx.value;
+        sender_acc.balance < tx_cost_limit_512)
         return {};
 
     const auto execution_gas_limit = tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
