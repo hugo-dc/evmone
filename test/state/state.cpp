@@ -61,6 +61,41 @@ int64_t compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noex
     return tx_cost + compute_tx_data_cost(rev, tx.data) + compute_access_list_cost(tx.access_list);
 }
 
+bool validate_transaction(const Account& sender_acc, const BlockInfo& block, const Transaction& tx,
+    evmc_revision rev) noexcept
+{
+    if (rev < EVMC_LONDON && tx.kind == Transaction::Kind::eip1559)
+        return false;
+
+    if (rev < EVMC_BERLIN && !tx.access_list.empty())
+        return false;
+
+    if (tx.max_priority_gas_price > tx.max_gas_price)
+        return false;  // Priority gas price is too high.
+
+    if (tx.gas_limit > block.gas_limit)
+        return false;
+
+    if (rev >= EVMC_LONDON && tx.max_gas_price < block.base_fee)
+        return false;
+
+    if (!sender_acc.code.empty())
+        return false;  // Origin must not be a contract (EIP-3607).
+
+    if (sender_acc.nonce == Account::NonceMax)
+        return false;
+
+    // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
+    // Note this is different from tx_max_cost computed with effective gas price later.
+    // The computation cannot overflow if done with 512-bit precision.
+    if (const auto tx_cost_limit_512 =
+            umul(intx::uint256{tx.gas_limit}, tx.max_gas_price) + tx.value;
+        sender_acc.balance < tx_cost_limit_512)
+        return false;
+
+    return true;
+}
+
 evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
 {
     const auto recipient = tx.to.has_value() ? *tx.to : evmc::address{};
@@ -83,41 +118,15 @@ evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) n
 std::optional<std::vector<Log>> transition(
     State& state, const BlockInfo& block, const Transaction& tx, evmc_revision rev, evmc::VM& vm)
 {
-    if (rev < EVMC_LONDON && tx.kind == Transaction::Kind::eip1559)
-        return {};
-
-    if (rev < EVMC_BERLIN && !tx.access_list.empty())
-        return {};
-
-    if (tx.max_gas_price < tx.max_priority_gas_price)
-        return {};  // tip too high
-
-    if (block.gas_limit < tx.gas_limit)
-        return {};
-
-    const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
-    if (tx.max_gas_price < base_fee)
-        return {};
-
     auto& sender_acc = state.get(tx.sender);
-    if (!sender_acc.code.empty())
-        return {};  // Tx origin must not be a contract (EIP-3607).
-
-    if (sender_acc.nonce == Account::NonceMax)
-        return {};
-
-    // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
-    // Note this is different from tx_max_cost computed with effective gas price later.
-    // The computation cannot overflow if done with 512-bit precision.
-    if (const auto tx_cost_limit_512 =
-            umul(intx::uint256{tx.gas_limit}, tx.max_gas_price) + tx.value;
-        sender_acc.balance < tx_cost_limit_512)
+    if (!validate_transaction(sender_acc, block, tx, rev))
         return {};
 
     const auto execution_gas_limit = tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
     if (execution_gas_limit < 0)
         return {};
 
+    const auto base_fee = (rev >= EVMC_LONDON) ? block.base_fee : 0;
     assert(tx.max_gas_price >= base_fee);                   // Checked at the front.
     assert(tx.max_gas_price >= tx.max_priority_gas_price);  // Checked at the front.
     const auto priority_gas_price =
@@ -139,6 +148,7 @@ std::optional<std::vector<Log>> transition(
     const auto refund_limit = gas_used / max_refund_quotient;
     const auto refund = std::min(result.gas_refund, refund_limit);
     gas_used -= refund;
+    assert(gas_used > 0);
 
     const auto sender_fee = gas_used * effective_gas_price;
     const auto producer_pay = gas_used * priority_gas_price;
