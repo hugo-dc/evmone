@@ -61,29 +61,32 @@ int64_t compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noex
     return tx_cost + compute_tx_data_cost(rev, tx.data) + compute_access_list_cost(tx.access_list);
 }
 
-bool validate_transaction(const Account& sender_acc, const BlockInfo& block, const Transaction& tx,
-    evmc_revision rev) noexcept
+/// Validates transaction and computes its execution gas limit (the amount of gas provided to EVM).
+/// @return  Non-negative execution gas limit for valid transaction
+///          or negative value for invalid transaction.
+int64_t validate_transaction(const Account& sender_acc, const BlockInfo& block,
+    const Transaction& tx, evmc_revision rev) noexcept
 {
     if (rev < EVMC_LONDON && tx.kind == Transaction::Kind::eip1559)
-        return false;
+        return -1;
 
     if (rev < EVMC_BERLIN && !tx.access_list.empty())
-        return false;
+        return -1;
 
     if (tx.max_priority_gas_price > tx.max_gas_price)
-        return false;  // Priority gas price is too high.
+        return -1;  // Priority gas price is too high.
 
     if (tx.gas_limit > block.gas_limit)
-        return false;
+        return -1;
 
     if (rev >= EVMC_LONDON && tx.max_gas_price < block.base_fee)
-        return false;
+        return -1;
 
     if (!sender_acc.code.empty())
-        return false;  // Origin must not be a contract (EIP-3607).
+        return -1;  // Origin must not be a contract (EIP-3607).
 
     if (sender_acc.nonce == Account::NonceMax)
-        return false;
+        return -1;
 
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     // Note this is different from tx_max_cost computed with effective gas price later.
@@ -91,9 +94,9 @@ bool validate_transaction(const Account& sender_acc, const BlockInfo& block, con
     if (const auto tx_cost_limit_512 =
             umul(intx::uint256{tx.gas_limit}, tx.max_gas_price) + tx.value;
         sender_acc.balance < tx_cost_limit_512)
-        return false;
+        return -1;
 
-    return true;
+    return tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
 }
 
 evmc_message build_message(const Transaction& tx, int64_t execution_gas_limit) noexcept
@@ -119,10 +122,7 @@ std::optional<std::vector<Log>> transition(
     State& state, const BlockInfo& block, const Transaction& tx, evmc_revision rev, evmc::VM& vm)
 {
     auto& sender_acc = state.get(tx.sender);
-    if (!validate_transaction(sender_acc, block, tx, rev))
-        return {};
-
-    const auto execution_gas_limit = tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
+    const auto execution_gas_limit = validate_transaction(sender_acc, block, tx, rev);
     if (execution_gas_limit < 0)
         return {};
 
