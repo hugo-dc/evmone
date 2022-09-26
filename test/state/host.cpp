@@ -335,17 +335,19 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    // Accessing precompiled contracts is always warm.
-    if (addr >= 0x01_address && addr <= 0x09_address)
-        return EVMC_ACCESS_WARM;
-
     auto acc = m_state.get_or_null(addr);
     if (acc == nullptr)  // If account is not in the State cache.
     {
         acc = &m_state.create(addr);
         acc->touched = true;  // Create a touched one (will be erased at the end of tx).
     }
-    return std::exchange(acc->access_status, EVMC_ACCESS_WARM);
+    const auto status = std::exchange(acc->access_status, EVMC_ACCESS_WARM);
+
+    // Overwrite status for precompiled contracts: they are always warm.
+    if (status == EVMC_ACCESS_COLD && addr >= 0x01_address && addr <= 0x09_address)
+        return EVMC_ACCESS_WARM;
+
+    return status;
 }
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
