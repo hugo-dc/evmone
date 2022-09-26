@@ -335,34 +335,17 @@ evmc_access_status Host::access_account(const address& addr) noexcept
     if (m_rev < EVMC_BERLIN)
         return EVMC_ACCESS_COLD;  // Ignore before Berlin.
 
-    // TODO: Predefined warm addresses can be applied to the state cache before execution.
-
-    // Transaction {sender,to} are always warm.
-    if (addr == m_tx.to)
-        return EVMC_ACCESS_WARM;
-    if (addr == m_tx.sender)
-        return EVMC_ACCESS_WARM;
-
     // Accessing precompiled contracts is always warm.
     if (addr >= 0x01_address && addr <= 0x09_address)
         return EVMC_ACCESS_WARM;
 
-    // Check tx access list.
-    for (const auto& [a, _] : m_tx.access_list)
+    auto acc = m_state.get_or_null(addr);
+    if (acc == nullptr)  // If account is not in the State cache.
     {
-        if (a == addr)
-            return EVMC_ACCESS_WARM;
+        acc = &m_state.create(addr);
+        acc->touched = true;  // Create a touched one (will be erased at the end of tx).
     }
-
-    // If the account is in the State cache mark it as "accessed".
-    if (auto acc = m_state.get_or_null(addr); acc != nullptr)
-        return std::exchange(acc->access_status, EVMC_ACCESS_WARM);
-
-    // Otherwise create new empty and touched account (will be erased at the end of transaction).
-    auto& ca = m_state.create(addr);
-    ca.touched = true;
-    ca.access_status = EVMC_ACCESS_WARM;
-    return EVMC_ACCESS_COLD;
+    return std::exchange(acc->access_status, EVMC_ACCESS_WARM);
 }
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept

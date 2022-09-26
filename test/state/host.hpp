@@ -62,8 +62,10 @@ private:
     void emit_log(const address& addr, const uint8_t* data, size_t data_size,
         const bytes32 topics[], size_t topics_count) noexcept override;
 
+public:
     evmc_access_status access_account(const address& addr) noexcept override;
 
+private:
     evmc_access_status access_storage(const address& addr, const bytes32& key) noexcept override;
 
     /// Prepares message for execution.

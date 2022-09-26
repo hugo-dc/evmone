@@ -140,6 +140,12 @@ std::optional<std::vector<Log>> transition(
 
     Host host{rev, vm, state, block, tx};
 
+    sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
+    if (tx.to.has_value())
+        host.access_account(*tx.to);
+    for (const auto& [a, _] : tx.access_list)
+        host.access_account(a);
+
     const auto result = host.call(build_message(tx, execution_gas_limit));
 
     auto gas_used = tx.gas_limit - result.gas_left;
