@@ -186,7 +186,11 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto& new_acc = m_state.get_or_create(msg.recipient);
     if (m_rev >= EVMC_SPURIOUS_DRAGON)
         new_acc.nonce = 1;
-    new_acc.storage.clear();  // In case of collision.
+
+    // Clear the new account storage, but keep the access status (from tx access list).
+    // This is only needed for tests and cannot happen in real networks.
+    for (auto& [_, v] : new_acc.storage)  // TODO(C++20): [[unlikely]]
+        v = {{}, {}, v.access_status};    // TODO(C++20): Use designated initializers.
 
     auto& sender_acc = m_state.get(msg.sender);  // TODO: Duplicated account lookup.
     const auto value = intx::be::load<intx::uint256>(msg.value);
