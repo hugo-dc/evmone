@@ -352,14 +352,6 @@ evmc_access_status Host::access_account(const address& addr) noexcept
 
 evmc_access_status Host::access_storage(const address& addr, const bytes32& key) noexcept
 {
-    // Check tx access list.
-    // TODO: Tx access list can be applied to the storage cache before execution.
-    for (const auto& [a, storage_keys] : m_tx.access_list)
-    {
-        if (a == addr && std::count(storage_keys.begin(), storage_keys.end(), key) != 0)
-            return EVMC_ACCESS_WARM;
-    }
-
     return std::exchange(m_state.get(addr).storage[key].access_status, EVMC_ACCESS_WARM);
 }
 }  // namespace evmone::state

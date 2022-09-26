@@ -143,8 +143,13 @@ std::optional<std::vector<Log>> transition(
     sender_acc.access_status = EVMC_ACCESS_WARM;  // Tx sender is always warm.
     if (tx.to.has_value())
         host.access_account(*tx.to);
-    for (const auto& [a, _] : tx.access_list)
-        host.access_account(a);
+    for (const auto& [a, storage_keys] : tx.access_list)
+    {
+        host.access_account(a);  // TODO: Return account ref.
+        auto& storage = state.get(a).storage;
+        for (const auto& key : storage_keys)
+            storage[key].access_status = EVMC_ACCESS_WARM;
+    }
 
     const auto result = host.call(build_message(tx, execution_gas_limit));
 
