@@ -25,13 +25,13 @@ public:
         return r.first->second;
     }
 
-    Account& get(const address& addr)
+    Account& get(const address& addr) noexcept
     {
         assert(m_accounts.count(addr) == 1);
         return m_accounts.find(addr)->second;
     }
 
-    Account* get_or_null(const address& addr)
+    Account* get_or_null(const address& addr) noexcept
     {
         const auto it = m_accounts.find(addr);
         if (it != m_accounts.end())
