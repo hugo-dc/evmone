@@ -202,7 +202,6 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     create_msg.input_data = nullptr;
     create_msg.input_size = 0;
 
-    // Execution can modify the state, iterators are invalidated.
     auto result = m_vm.execute(*this, m_rev, create_msg, msg.input_data, msg.input_size);
     if (result.status_code != EVMC_SUCCESS)
     {
@@ -213,23 +212,17 @@ evmc::Result Host::create(const evmc_message& msg) noexcept
     auto gas_left = result.gas_left;
     assert(gas_left >= 0);
 
-    bytes_view code{result.output_data, result.output_size};
+    const bytes_view code{result.output_data, result.output_size};
     if (m_rev >= EVMC_SPURIOUS_DRAGON && code.size() > 0x6000)
         return evmc::Result{EVMC_OUT_OF_GAS};
 
-    const auto cost = static_cast<int64_t>(code.size()) * 200;
+    // Code deployment cost.
+    const auto cost = static_cast<int64_t>(code.size()) * 200;  // TODO(C++20): std::ssize(code).
     gas_left -= cost;
     if (gas_left < 0)
     {
-        evmc::Result r{EVMC_OUT_OF_GAS};
-
-        if (m_rev == EVMC_FRONTIER)
-        {
-            r.status_code = EVMC_SUCCESS;
-            r.gas_left = result.gas_left;
-        }
-
-        return r;
+        return (m_rev == EVMC_FRONTIER) ? evmc::Result{EVMC_SUCCESS, result.gas_left} :
+                                          evmc::Result{EVMC_OUT_OF_GAS};
     }
 
     // Reject EF code.
