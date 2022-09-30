@@ -29,9 +29,10 @@ public:
 int main(int argc, char* argv[])
 {
     static constexpr std::string_view filter_flag_name = "--gtest_filter";
-    const auto has_user_filter = std::count_if(argv, argv + argc, [](const char* arg) noexcept {
+    const auto has_user_filter = std::find_if(argv, argv + argc, [](const char* arg) noexcept {
+        // TODO(C++20): Use .starts_with().
         return std::string_view{arg}.substr(0, filter_flag_name.size()) == filter_flag_name;
-    }) != 0;
+    }) != (argv + argc);
 
     testing::InitGoogleTest(&argc, argv);  // Process GoogleTest flags.
 
