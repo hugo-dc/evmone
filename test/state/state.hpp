@@ -41,7 +41,7 @@ public:
 
     Account& get_or_create(const address& addr) { return m_accounts[addr]; }
 
-    auto& get_accounts() { return m_accounts; }
+    [[nodiscard]] auto& get_accounts() noexcept { return m_accounts; }
 };
 
 struct BlockInfo
