@@ -57,7 +57,8 @@ int main(int argc, char* argv[])
             ;
     }
 
-    evmc::VM vm{evmc_create_evmone(), {{"O", "0"}, /*{"trace", "1"}*/}};
+    evmc::VM vm{evmc_create_evmone(), {{"O", "0"}, {"trace", "1"}}};
+    //evmc::VM vm{evmc_create_evmone(), {{"O", "0"}}};
 
     const fs::path arg{argv[1]};
     if (fs::is_regular_file(arg))

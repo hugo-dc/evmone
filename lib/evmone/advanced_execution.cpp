@@ -35,6 +35,10 @@ evmc_result execute(evmc_vm* /*unused*/, const evmc_host_interface* host, evmc_h
     {
         if (rev >= EVMC_SHANGHAI)
         {
+            const auto val_error = validate_eof(rev, container.begin());
+
+            if (val_error != EOFValidationError::success)
+              return evmc::make_result(EVMC_FAILURE, 0, 0, nullptr, 0);
             const auto eof1_header = read_valid_eof1_header(container.begin());
             analysis = analyze(rev, {&container[eof1_header.code_begin()], eof1_header.code_size});
         }
