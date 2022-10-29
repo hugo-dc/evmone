@@ -10,6 +10,7 @@
 #include "vm.hpp"
 #include <evmc/instructions.h>
 #include <memory>
+#include <fstream>
 
 #ifdef NDEBUG
 #define release_inline gnu::always_inline, msvc::forceinline
@@ -108,6 +109,13 @@ inline evmc_status_code check_requirements(
         "undefined instructions must not be handled by check_requirements()");
 
     auto gas_cost = instr::gas_costs[EVMC_FRONTIER][Op];  // Init assuming const cost.
+							  //
+    const auto* evmc_tbl = evmc_get_instruction_names_table(EVMC_MAX_REVISION);
+    std::ofstream file;
+    file.open("/home/hugo/evmone-debug.txt", std::ios_base::app);
+    file << evmc_tbl[Op] << " - Gas cost: " << gas_cost << " - Gas left: " << gas_left << "\n";
+    file.close();
+
     if constexpr (!instr::has_const_gas_cost(Op))
     {
         gas_cost = cost_table[Op];  // If not, load the cost from the table.
@@ -134,6 +142,7 @@ inline evmc_status_code check_requirements(
 
     if (INTX_UNLIKELY((gas_left -= gas_cost) < 0))
         return EVMC_OUT_OF_GAS;
+
 
     return EVMC_SUCCESS;
 }
