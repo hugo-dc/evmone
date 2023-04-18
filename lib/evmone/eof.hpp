@@ -100,6 +100,7 @@ enum class EOFValidationError
     invalid_code_section_index,
     invalid_dataloadn_index,
 
+    invalid_code,
     impossible,
 };
 
