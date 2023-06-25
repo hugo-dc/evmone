@@ -99,6 +99,11 @@ struct BlockInfo
     bytes32 prev_randao;
     uint64_t base_fee = 0;
     std::vector<Ommer> ommers = {};
+
+    /// The "excess data gas" parameter from EIP-4844
+    /// for computing the data gas price in the current block.
+    uint64_t excess_data_gas = 0;
+
     std::vector<Withdrawal> withdrawals;
     std::unordered_map<int64_t, hash256> known_block_hashes = {};
 };
@@ -123,6 +128,10 @@ struct Transaction
         /// The typed transaction with priority gas price.
         /// Introduced by EIP-1559 https://eips.ethereum.org/EIPS/eip-1559.
         eip1559 = 2,
+
+        /// The typed blob transaction (with array of blob hashes).
+        /// Introduced by EIP-4844 https://eips.ethereum.org/EIPS/eip-4844.
+        blob = 3,
     };
 
     Type type = Type::legacy;
@@ -134,6 +143,7 @@ struct Transaction
     std::optional<address> to;
     intx::uint256 value;
     AccessList access_list;
+    std::vector<bytes32> blob_hashes;
     uint64_t chain_id = 0;
     uint64_t nonce = 0;
     intx::uint256 r;
