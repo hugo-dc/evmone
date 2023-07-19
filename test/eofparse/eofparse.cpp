@@ -42,7 +42,7 @@ std::optional<evmc::bytes> from_hex_skip_nonalnum(InputIterator begin, InputIter
 
 int main(int argc, char* argv[])
 {
-    evmc_revision rev = EVMC_CANCUN;
+    evmc_revision rev = EVMC_PRAGUE;
 
     try
     {

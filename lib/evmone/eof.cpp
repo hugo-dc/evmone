@@ -30,6 +30,7 @@ constexpr uint8_t DATA_SECTION = 0x04;
 constexpr uint8_t MAX_SECTION = DATA_SECTION;
 constexpr auto CODE_SECTION_NUMBER_LIMIT = 1024;
 constexpr auto MAX_STACK_HEIGHT = 0x03FF;
+constexpr auto STACK_LIMIT = 0x400;
 constexpr auto OUTPUTS_INPUTS_NUMBER_LIMIT = 0x7F;
 constexpr auto REL_OFFSET_SIZE = sizeof(int16_t);
 
@@ -168,12 +169,13 @@ std::variant<EOFSectionHeaders, EOFValidationError> validate_eof_headers(bytes_v
                                      std::accumulate(section_headers[CODE_SECTION].begin(),
                                          section_headers[CODE_SECTION].end(), 0) +
                                      section_headers[DATA_SECTION].front();
-    const auto remaining_container_size = container_end - it;
-    if (section_bodies_size != remaining_container_size)
-        return EOFValidationError::invalid_section_bodies_size;
 
     if (section_headers[TYPE_SECTION][0] != section_headers[CODE_SECTION].size() * 4)
         return EOFValidationError::invalid_type_section_size;
+
+    const auto remaining_container_size = container_end - it;
+    if (section_bodies_size != remaining_container_size)
+        return EOFValidationError::invalid_section_bodies_size;
 
     return section_headers;
 }
@@ -346,6 +348,9 @@ std::variant<EOFValidationError, int32_t> validate_max_stack_height(
         if (opcode == OP_CALLF)
         {
             const auto fid = read_uint16_be(&code[i + 1]);
+
+            if (stack_heights[i] + code_types[fid].max_stack_height > STACK_LIMIT)
+                return EOFValidationError::stack_overflow;
 
             stack_height_required = static_cast<int8_t>(code_types[fid].inputs);
             stack_height_change =
@@ -546,7 +551,7 @@ uint8_t get_eof_version(bytes_view container) noexcept
 
 EOFValidationError validate_eof(evmc_revision rev, bytes_view container) noexcept
 {
-    if (rev < EVMC_CANCUN)
+    if (rev < EVMC_PRAGUE)
         return EOFValidationError::invalid_code;
 
     if (!is_eof_container(container))
@@ -630,6 +635,8 @@ std::string_view get_error_message(EOFValidationError err) noexcept
         return "unreachable_instructions";
     case EOFValidationError::stack_underflow:
         return "stack_underflow";
+    case EOFValidationError::stack_overflow:
+        return "stack_overflow";
     case EOFValidationError::invalid_code_section_index:
         return "invalid_code_section_index";
     case EOFValidationError::invalid_dataloadn_index:
