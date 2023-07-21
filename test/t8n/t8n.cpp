@@ -71,6 +71,7 @@ int main(int argc, const char* argv[])
                 trace = true;
         }
 
+        static constexpr auto MAX_DATA_GAS_PER_BLOCK = 786432;
         state::BlockInfo block;
         state::State state;
 
@@ -112,6 +113,7 @@ int main(int argc, const char* argv[])
         j_result["currentBaseFee"] = hex0x(block.base_fee);
 
         int64_t cumulative_gas_used = 0;
+        uint64_t data_gas_used = 0;
         std::vector<state::Transaction> transactions;
         std::vector<state::TransactionReceipt> receipts;
         int64_t block_gas_left = block.gas_limit;
@@ -156,6 +158,21 @@ int main(int argc, const char* argv[])
                             throw std::logic_error("transaction hash mismatched: computed " +
                                                    computed_tx_hash_str + ", expected " +
                                                    hex0x(loaded_tx_hash_opt.value()));
+                    }
+
+                    if (tx.type == evmone::state::Transaction::Type::blob)
+                    {
+                        const auto total_data_gas = 0x20000 * tx.blob_hashes.size();
+                        if (data_gas_used + total_data_gas > MAX_DATA_GAS_PER_BLOCK)
+                        {
+                            json::json j_rejected_tx;
+                            j_rejected_tx["hash"] = hex0x(computed_tx_hash);
+                            j_rejected_tx["index"] = i;
+                            j_rejected_tx["error"] = "data gas limit exceeded";
+                            j_result["rejected"].push_back(j_rejected_tx);
+                            continue;
+                        }
+                        data_gas_used += total_data_gas;
                     }
 
                     std::ofstream trace_file_output;
