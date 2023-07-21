@@ -231,6 +231,10 @@ state::BlockInfo from_json<state::BlockInfo>(const json::json& j)
             std::max(parent_excess_data_gas + parent_data_gas_used, TARGET_DATA_GAS_PER_BLOCK) -
             TARGET_DATA_GAS_PER_BLOCK;
     }
+    else if (const auto it2 = j.find("currentExcessDataGas"); it2 != j.end())
+    {
+        excess_data_gas = from_json<uint64_t>(*it2);
+    }
 
     return {from_json<int64_t>(j.at("currentNumber")), from_json<int64_t>(j.at("currentTimestamp")),
         parent_timestamp, from_json<int64_t>(j.at("currentGasLimit")),
