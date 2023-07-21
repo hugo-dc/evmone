@@ -169,6 +169,7 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
         const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
         // FIXME: Can overflow uint256.
         max_total_fee += total_data_gas * tx.max_data_gas_price;
+        errmsg << "\nmax_total_fee: " << hex(max_total_fee);
     }
     if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
@@ -256,13 +257,15 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
         const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
         const auto data_fee = total_data_gas * data_gas_price;
 
+        errmsg << "\nblock.excess_data_gas: " << block.excess_data_gas;
         errmsg << "\nnum_blob_hashes: " << tx.blob_hashes.size();
         errmsg << "\ndata_gas_price: " << data_gas_price;
         errmsg << "\ntotal_data_gas: " << total_data_gas;
         errmsg << "\ndata_fee: " << data_fee;
+        errmsg << "\nbalance: " << sender_acc.balance[0];
 
-        if (data_fee >= sender_acc.balance)
-            return make_error_code(INSUFFICIENT_FUNDS);
+        if (data_fee > sender_acc.balance)
+            return make_error_code(insufficient_data_funds);
         sender_acc.balance -= data_fee;
     }
 
