@@ -398,6 +398,11 @@ inline bytecode tload(bytecode index)
     return index + OP_TLOAD;
 }
 
+inline bytecode blobhash(bytecode index)
+{
+    return index + OP_BLOBHASH;
+}
+
 template <Opcode kind>
 struct call_instruction
 {
