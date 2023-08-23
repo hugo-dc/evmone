@@ -43,7 +43,7 @@ inline const std::error_category& evmone_category() noexcept
             case SUCCESS:
                 return "";
             case INTRINSIC_GAS_TOO_LOW:
-                return "intrinsic gas too low:";
+                return "intrinsic gas too low";
             case TX_TYPE_NOT_SUPPORTED:
                 return "transaction type not supported";
             case INSUFFICIENT_FUNDS:

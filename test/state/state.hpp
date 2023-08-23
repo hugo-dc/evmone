@@ -14,6 +14,8 @@
 
 namespace evmone::state
 {
+extern std::ostringstream errmsg;
+
 class State
 {
     std::unordered_map<address, Account> m_accounts;
@@ -139,6 +141,7 @@ struct Transaction
     int64_t gas_limit;
     intx::uint256 max_gas_price;
     intx::uint256 max_priority_gas_price;
+    intx::uint256 max_data_gas_price;
     address sender;
     std::optional<address> to;
     intx::uint256 value;

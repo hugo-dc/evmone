@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string_view>
 
 namespace fs = std::filesystem;
@@ -73,13 +74,18 @@ int main(int argc, const char* argv[])
         state::BlockInfo block;
         state::State state;
 
+        const fs::path tmpdir{"/tmp/evmone"};
+
         if (!alloc_file.empty())
         {
+            state::errmsg << std::string("\n") << alloc_file;
             const auto j = json::json::parse(std::ifstream{alloc_file}, nullptr, false);
             state = test::from_json<state::State>(j);
         }
         if (!env_file.empty())
         {
+            state::errmsg << "\n" << env_file;
+            fs::copy(env_file, tmpdir / env_file.filename(), fs::copy_options::update_existing);
             const auto j = json::json::parse(std::ifstream{env_file});
             block = test::from_json<state::BlockInfo>(j);
         }
@@ -117,6 +123,8 @@ int main(int argc, const char* argv[])
         // Parse and execute transactions
         if (!txs_file.empty())
         {
+            state::errmsg << "\n" << txs_file;
+            fs::copy(txs_file, tmpdir / txs_file.filename(), fs::copy_options::update_existing);
             const auto j_txs = json::json::parse(std::ifstream{txs_file});
 
             evmc::VM vm{evmc_create_evmone(), {{"O", "0"}}};
@@ -172,7 +180,7 @@ int main(int argc, const char* argv[])
                         json::json j_rejected_tx;
                         j_rejected_tx["hash"] = computed_tx_hash_str;
                         j_rejected_tx["index"] = i;
-                        j_rejected_tx["error"] = ec.message();
+                        j_rejected_tx["error"] = ec.message() + " ** " + state::errmsg.str();
                         j_result["rejected"].push_back(j_rejected_tx);
                     }
                     else

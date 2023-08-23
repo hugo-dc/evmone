@@ -204,7 +204,7 @@ TEST(statetest_loader, invalid_tx_type)
             })";
 
         EXPECT_THAT([&] { test::from_json<state::Transaction>(json::json::parse(input)); },
-            ThrowsMessage<std::invalid_argument>("wrong transaction type"));
+            ThrowsMessage<std::invalid_argument>("wrong transaction type: 2, expected: 1"));
     }
     {
         constexpr std::string_view input = R"({
@@ -222,7 +222,7 @@ TEST(statetest_loader, invalid_tx_type)
         })";
 
         EXPECT_THAT([&] { test::from_json<state::Transaction>(json::json::parse(input)); },
-            ThrowsMessage<std::invalid_argument>("wrong transaction type"));
+            ThrowsMessage<std::invalid_argument>("wrong transaction type: 1, expected: 0"));
     }
 
     {
@@ -246,7 +246,7 @@ TEST(statetest_loader, invalid_tx_type)
         })";
 
         EXPECT_THAT([&] { test::from_json<state::Transaction>(json::json::parse(input)); },
-            ThrowsMessage<std::invalid_argument>("wrong transaction type"));
+            ThrowsMessage<std::invalid_argument>("wrong transaction type: 1, expected: 2"));
     }
 }
 

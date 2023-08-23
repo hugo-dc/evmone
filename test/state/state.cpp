@@ -9,9 +9,11 @@
 #include "rlp.hpp"
 #include <evmone/evmone.h>
 #include <evmone/execution_state.hpp>
+#include <sstream>
 
 namespace evmone::state
 {
+std::ostringstream errmsg;
 namespace
 {
 inline constexpr int64_t num_words(size_t size_in_bytes) noexcept
@@ -54,8 +56,7 @@ uint64_t fake_exponential(uint64_t factor, uint64_t numerator, uint64_t denomina
     return output / denominator;
 }
 
-int64_t compute_tx_intrinsic_cost(
-    evmc_revision rev, const Transaction& tx, uint64_t excess_data_gas) noexcept
+int64_t compute_tx_intrinsic_cost(evmc_revision rev, const Transaction& tx) noexcept
 {
     static constexpr auto call_tx_cost = 21000;
     static constexpr auto create_tx_cost = 53000;
@@ -66,15 +67,6 @@ int64_t compute_tx_intrinsic_cost(
     const auto tx_cost = is_create && rev >= EVMC_HOMESTEAD ? create_tx_cost : call_tx_cost;
     auto c = tx_cost + compute_tx_data_cost(rev, tx.data) +
              compute_access_list_cost(tx.access_list) + initcode_cost;
-
-    if (tx.type == Transaction::Type::blob)
-    {
-        static constexpr auto DATA_GAS_PER_BLOB = 0x20000;
-        const auto data_gas_price = fake_exponential(1, excess_data_gas, 3338477);
-        const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
-        const auto data_fee = total_data_gas * data_gas_price;
-        c += static_cast<int64_t>(data_fee);
-    }
 
     return c;
 }
@@ -104,6 +96,8 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
     const BlockInfo& block, const Transaction& tx, evmc_revision rev,
     int64_t block_gas_left) noexcept
 {
+    const auto data_gas_price = fake_exponential(1, block.excess_data_gas, 3338477);
+
     switch (tx.type)
     {
     case Transaction::Type::blob:
@@ -113,6 +107,12 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
             return make_error_code(create_blob_tx);
         if (tx.blob_hashes.empty())
             return make_error_code(empty_blob_hashes_list);
+        if (tx.blob_hashes.size() > 6)
+            return make_error_code(empty_blob_hashes_list);
+
+        if (tx.max_data_gas_price < data_gas_price)
+            return make_error_code(FEE_CAP_LESS_THEN_BLOCKS);
+
         if (std::ranges::any_of(tx.blob_hashes, [](const auto& h) { return h.bytes[0] != 0x01; }))
             return make_error_code(invalid_blob_hash_version);
         [[fallthrough]];
@@ -160,15 +160,26 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
     // Compute and check if sender has enough balance for the theoretical maximum transaction cost.
     // Note this is different from tx_max_cost computed with effective gas price later.
     // The computation cannot overflow if done with 512-bit precision.
-    if (const auto tx_cost_limit_512 =
-            umul(intx::uint256{tx.gas_limit}, tx.max_gas_price) + tx.value;
-        sender_acc.balance < tx_cost_limit_512)
+    auto max_total_fee = umul(intx::uint256{tx.gas_limit}, tx.max_gas_price);
+    max_total_fee += tx.value;
+
+    if (tx.type == Transaction::Type::blob)
+    {
+        static constexpr auto DATA_GAS_PER_BLOB = 0x20000;
+        const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
+        // FIXME: Can overflow uint256.
+        max_total_fee += total_data_gas * tx.max_data_gas_price;
+    }
+    if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
 
-    const auto execution_gas_limit =
-        tx.gas_limit - compute_tx_intrinsic_cost(rev, tx, block.excess_data_gas);
+    const auto execution_gas_limit = tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
     if (execution_gas_limit < 0)
+    {
+        errmsg << "\ntx.gas_limit: " << tx.gas_limit;
+        errmsg << "\nexecution_gas_limit: " << execution_gas_limit;
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
+    }
 
     return execution_gas_limit;
 }
@@ -237,6 +248,23 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
     const auto tx_max_cost = tx.gas_limit * effective_gas_price;
 
     sender_acc.balance -= tx_max_cost;  // Modify sender balance after all checks.
+
+    if (tx.type == Transaction::Type::blob)
+    {
+        static constexpr auto DATA_GAS_PER_BLOB = 0x20000;
+        const auto data_gas_price = fake_exponential(1, block.excess_data_gas, 3338477);
+        const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
+        const auto data_fee = total_data_gas * data_gas_price;
+
+        errmsg << "\nnum_blob_hashes: " << tx.blob_hashes.size();
+        errmsg << "\ndata_gas_price: " << data_gas_price;
+        errmsg << "\ntotal_data_gas: " << total_data_gas;
+        errmsg << "\ndata_fee: " << data_fee;
+
+        if (data_fee >= sender_acc.balance)
+            return make_error_code(INSUFFICIENT_FUNDS);
+        sender_acc.balance -= data_fee;
+    }
 
     Host host{rev, vm, state, block, tx};
 
