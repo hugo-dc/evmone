@@ -224,22 +224,21 @@ state::BlockInfo from_json<state::BlockInfo>(const json::json& j)
     uint64_t excess_data_gas = 0;
     if (const auto it = j.find("parentExcessDataGas"); it != j.end())
     {
-        const auto parent_excess_data_gas = from_json<uint64_t>(*it);
-        const auto parent_data_gas_used = from_json<uint64_t>(j.at("parentDataGasUsed"));
-        static constexpr uint64_t TARGET_DATA_GAS_PER_BLOCK = 0x60000;
-        excess_data_gas =
-            std::max(parent_excess_data_gas + parent_data_gas_used, TARGET_DATA_GAS_PER_BLOCK) -
-            TARGET_DATA_GAS_PER_BLOCK;
+        const auto parent_excess_blob_gas = from_json<uint64_t>(*it);
+        const auto parent_blob_gas_used = from_json<uint64_t>(j.at("parentBlobGasUsed"));
+        static constexpr uint64_t TARGET_BLOB_GAS_PER_BLOCK = 0x60000;
+        excess_blob_gas =
+            std::max(parent_excess_blob_gas + parent_blob_gas_used, TARGET_BLOB_GAS_PER_BLOCK) -
+            TARGET_BLOB_GAS_PER_BLOCK;
     }
-    else if (const auto it2 = j.find("currentExcessDataGas"); it2 != j.end())
+    else if (const auto it2 = j.find("currentExcessBlobGas"); it2 != j.end())
     {
-        excess_data_gas = from_json<uint64_t>(*it2);
+        excess_blob_gas = from_json<uint64_t>(*it2);
     }
 
     return {from_json<int64_t>(j.at("currentNumber")), from_json<int64_t>(j.at("currentTimestamp")),
-        parent_timestamp, from_json<int64_t>(j.at("currentGasLimit")),
-        from_json<evmc::address>(j.at("currentCoinbase")), current_difficulty, parent_difficulty,
-        parent_uncle_hash, prev_randao, base_fee, std::move(ommers), excess_data_gas,
+        from_json<int64_t>(j.at("currentGasLimit")),
+        from_json<evmc::address>(j.at("currentCoinbase")), difficulty, base_fee, excess_data_gas,
         std::move(withdrawals), std::move(block_hashes)};
 }
 
@@ -329,16 +328,14 @@ static void from_json_tx_common(const json::json& j, state::Transaction& o)
         o.max_priority_gas_price = from_json<intx::uint256>(j.at("maxPriorityFeePerGas"));
     }
 
-    if (const auto it = j.find("maxFeePerDataGas"); it != j.end())
-        o.max_data_gas_price = from_json<intx::uint256>(*it);
+    if (const auto it = j.find("maxFeePerBlobGas"); it != j.end())
+        o.max_blob_gas_price = from_json<intx::uint256>(*it);
 
     if (const auto it = j.find("blobVersionedHashes"); it != j.end())
     {
         o.type = state::Transaction::Type::blob;
         for (const auto& hash : *it)
             o.blob_hashes.push_back(from_json<bytes32>(hash));
-
-        o.max_data_gas_price = from_json<intx::uint256>(j.at("maxFeePerBlobGas"));
     }
 }
 
