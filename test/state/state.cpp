@@ -13,7 +13,6 @@
 
 namespace evmone::state
 {
-std::ostringstream errmsg;
 namespace
 {
 inline constexpr int64_t num_words(size_t size_in_bytes) noexcept
@@ -86,7 +85,7 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
     const BlockInfo& block, const Transaction& tx, evmc_revision rev,
     int64_t block_gas_left) noexcept
 {
-    const auto data_gas_price = fake_exponential(1, block.excess_data_gas, 3338477);
+    const auto blob_gas_price = fake_exponential(1, block.excess_blob_gas, 3338477);
 
     switch (tx.type)
     {
@@ -94,17 +93,17 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
         if (rev < EVMC_CANCUN)
             return make_error_code(TX_TYPE_NOT_SUPPORTED);
         if (!tx.to.has_value())
-            return make_error_code(create_blob_tx);
+            return make_error_code(CREATE_BLOB_TX);
         if (tx.blob_hashes.empty())
-            return make_error_code(empty_blob_hashes_list);
+            return make_error_code(EMPTY_BLOB_HASHES_LIST);
         if (tx.blob_hashes.size() > 6)
-            return make_error_code(empty_blob_hashes_list);
+            return make_error_code(EMPTY_BLOB_HASHES_LIST);
 
-        if (tx.max_data_gas_price < data_gas_price)
+        if (tx.max_blob_gas_price < blob_gas_price)
             return make_error_code(FEE_CAP_LESS_THEN_BLOCKS);
 
         if (std::ranges::any_of(tx.blob_hashes, [](const auto& h) { return h.bytes[0] != 0x01; }))
-            return make_error_code(invalid_blob_hash_version);
+            return make_error_code(INVALID_BLOB_HASH_VERSION);
         [[fallthrough]];
 
     case Transaction::Type::eip1559:
@@ -155,22 +154,17 @@ std::variant<int64_t, std::error_code> validate_transaction(const Account& sende
 
     if (tx.type == Transaction::Type::blob)
     {
-        static constexpr auto DATA_GAS_PER_BLOB = 0x20000;
-        const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
+        static constexpr auto GAS_PER_BLOB = 0x20000;
+        const auto total_blob_gas = GAS_PER_BLOB * tx.blob_hashes.size();
         // FIXME: Can overflow uint256.
-        max_total_fee += total_data_gas * tx.max_data_gas_price;
-        errmsg << "\nmax_total_fee: " << hex(max_total_fee);
+        max_total_fee += total_blob_gas * tx.max_blob_gas_price;
     }
     if (sender_acc.balance < max_total_fee)
         return make_error_code(INSUFFICIENT_FUNDS);
 
     const auto execution_gas_limit = tx.gas_limit - compute_tx_intrinsic_cost(rev, tx);
     if (execution_gas_limit < 0)
-    {
-        errmsg << "\ntx.gas_limit: " << tx.gas_limit;
-        errmsg << "\nexecution_gas_limit: " << execution_gas_limit;
         return make_error_code(INTRINSIC_GAS_TOO_LOW);
-    }
 
     return execution_gas_limit;
 }
@@ -242,21 +236,14 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
 
     if (tx.type == Transaction::Type::blob)
     {
-        static constexpr auto DATA_GAS_PER_BLOB = 0x20000;
-        const auto data_gas_price = fake_exponential(1, block.excess_data_gas, 3338477);
-        const auto total_data_gas = DATA_GAS_PER_BLOB * tx.blob_hashes.size();
-        const auto data_fee = total_data_gas * data_gas_price;
+        static constexpr auto BLOB_GAS_PER_BLOB = 0x20000;
+        const auto blob_gas_price = fake_exponential(1, block.excess_blob_gas, 3338477);
+        const auto blob_gas_used = BLOB_GAS_PER_BLOB * tx.blob_hashes.size();
+        const auto blob_fee = blob_gas_used * blob_gas_price;
 
-        errmsg << "\nblock.excess_data_gas: " << block.excess_data_gas;
-        errmsg << "\nnum_blob_hashes: " << tx.blob_hashes.size();
-        errmsg << "\ndata_gas_price: " << data_gas_price;
-        errmsg << "\ntotal_data_gas: " << total_data_gas;
-        errmsg << "\ndata_fee: " << data_fee;
-        errmsg << "\nbalance: " << sender_acc.balance[0];
-
-        if (data_fee > sender_acc.balance)
-            return make_error_code(insufficient_data_funds);
-        sender_acc.balance -= data_fee;
+        if (blob_fee > sender_acc.balance)
+            return make_error_code(INSUFFICIENT_BLOB_FUNDS);
+        sender_acc.balance -= blob_fee;
     }
 
     Host host{rev, vm, state, block, tx};

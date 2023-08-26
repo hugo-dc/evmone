@@ -14,8 +14,6 @@
 
 namespace evmone::state
 {
-extern std::ostringstream errmsg;
-
 class State
 {
     std::unordered_map<address, Account> m_accounts;
@@ -102,9 +100,9 @@ struct BlockInfo
     uint64_t base_fee = 0;
     std::vector<Ommer> ommers = {};
 
-    /// The "excess data gas" parameter from EIP-4844
-    /// for computing the data gas price in the current block.
-    uint64_t excess_data_gas = 0;
+    /// The "excess blob gas" parameter from EIP-4844
+    /// for computing the blob gas price in the current block.
+    uint64_t excess_blob_gas = 0;
 
     std::vector<Withdrawal> withdrawals;
     std::unordered_map<int64_t, hash256> known_block_hashes = {};
@@ -141,7 +139,7 @@ struct Transaction
     int64_t gas_limit;
     intx::uint256 max_gas_price;
     intx::uint256 max_priority_gas_price;
-    intx::uint256 max_data_gas_price;
+    intx::uint256 max_blob_gas_price;
     address sender;
     std::optional<address> to;
     intx::uint256 value;
