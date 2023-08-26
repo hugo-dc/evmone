@@ -308,6 +308,7 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
 
 [[nodiscard]] bytes rlp_encode(const Transaction& tx)
 {
+    // TODO: Refactor this function. For all type of transactions most of the code is similar.
     if (tx.type == Transaction::Type::legacy)
     {
         // rlp [nonce, gas_price, gas_limit, to, value, data, v, r, s];
@@ -326,7 +327,7 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
                    tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
                    tx.access_list, static_cast<bool>(tx.v), tx.r, tx.s);
     }
-    else
+    else if (tx.type == Transaction::Type::eip1559)
     {
         if (tx.v > 1)
             throw std::invalid_argument("`v` value for eip1559 transaction must be 0 or 1");
@@ -338,6 +339,20 @@ std::variant<TransactionReceipt, std::error_code> transition(State& state, const
                    static_cast<uint64_t>(tx.gas_limit),
                    tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
                    tx.access_list, static_cast<bool>(tx.v), tx.r, tx.s);
+    }
+    else
+    {
+        if (tx.v > 1)
+            throw std::invalid_argument("`v` value for eip1559 transaction must be 0 or 1");
+        // tx_type +
+        // rlp [chain_id, nonce, max_priority_fee_per_gas, max_fee_per_gas, gas_limit, to, value,
+        // data, access_list, max_fee_per_blob_gas, blob_versioned_hashes, sig_parity, r, s];
+        return bytes{stdx::to_underlying(Transaction::Type::blob)} +
+               rlp::encode_tuple(tx.chain_id, tx.nonce, tx.max_priority_gas_price, tx.max_gas_price,
+                   static_cast<uint64_t>(tx.gas_limit),
+                   tx.to.has_value() ? tx.to.value() : bytes_view(), tx.value, tx.data,
+                   tx.access_list, tx.max_blob_gas_price, tx.blob_hashes, static_cast<bool>(tx.v),
+                   tx.r, tx.s);
     }
 }
 
