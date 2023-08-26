@@ -139,12 +139,12 @@ struct Transaction
     int64_t gas_limit;
     intx::uint256 max_gas_price;
     intx::uint256 max_priority_gas_price;
-    intx::uint256 max_blob_gas_price;
+    intx::uint256 max_blob_gas_price = {};
     address sender;
     std::optional<address> to;
     intx::uint256 value;
     AccessList access_list;
-    std::vector<bytes32> blob_hashes;
+    std::vector<bytes32> blob_hashes = {};
     uint64_t chain_id = 0;
     uint64_t nonce = 0;
     intx::uint256 r;
