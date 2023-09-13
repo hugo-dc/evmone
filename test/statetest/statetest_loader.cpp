@@ -221,8 +221,8 @@ state::BlockInfo from_json<state::BlockInfo>(const json::json& j)
     if (parent_timestamp_it != j.end())
         parent_timestamp = from_json<int64_t>(*parent_timestamp_it);
 
-    uint64_t excess_data_gas = 0;
-    if (const auto it = j.find("parentExcessDataGas"); it != j.end())
+    uint64_t excess_blob_gas = 0;
+    if (const auto it = j.find("parentExcessBlobGas"); it != j.end())
     {
         const auto parent_excess_blob_gas = from_json<uint64_t>(*it);
         const auto parent_blob_gas_used = from_json<uint64_t>(j.at("parentBlobGasUsed"));
@@ -237,9 +237,10 @@ state::BlockInfo from_json<state::BlockInfo>(const json::json& j)
     }
 
     return {from_json<int64_t>(j.at("currentNumber")), from_json<int64_t>(j.at("currentTimestamp")),
-        from_json<int64_t>(j.at("currentGasLimit")),
-        from_json<evmc::address>(j.at("currentCoinbase")), difficulty, base_fee, excess_data_gas,
-        std::move(withdrawals), std::move(block_hashes)};
+        parent_timestamp, from_json<int64_t>(j.at("currentGasLimit")),
+        from_json<evmc::address>(j.at("currentCoinbase")), current_difficulty, parent_difficulty,
+        parent_uncle_hash, prev_randao, base_fee, ommers, excess_blob_gas, std::move(withdrawals),
+        std::move(block_hashes)};
 }
 
 template <>
